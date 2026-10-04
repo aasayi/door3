@@ -18,7 +18,7 @@ const SUITS = '<div class="suits">♠ <span class="r">♥ ♦</span> ♣</div>';
 
 // Isi satu pintu: bingkai, ambang (cahaya/langit), daun pintu 4 panel + kenop. Warna lewat CSS var.
 const doorVars = (c, w) => `--c:${c.c};--cd:${c.d};--w:${w}px`;
-const doorInner = letter => `<span class="fr"></span><span class="in"></span><span class="lf"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i>${letter ? `<em class="lt">${letter}</em>` : ''}<b></b></span>`;
+const doorInner = () => `<span class="fr"></span><span class="in"></span><span class="lf"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><b></b></span>`;
 
 async function rpc(fn, args) {
   const h = {apikey: SB_KEY, 'Content-Type': 'application/json'};
@@ -34,7 +34,7 @@ async function rpc(fn, args) {
 function loginScreen(msg = '') {
   stop(); scene('closed');
   app.innerHTML = `<div class="login" id="lg">${SUITS}<h1 class="logo">DOOR<span class="sl">//</span>3</h1>
-    <div class="hall"><div class="dr big" id="bd" style="${doorVars(COLORS[0], 100)}">${doorInner('')}</div></div>
+    <div class="hall"><div class="dr big" id="bd" style="${doorVars(COLORS[0], 100)}">${doorInner()}</div></div>
     <form class="plaque" id="f">
       <label>Username<input name="u" autocomplete="username" required></label>
       <label>Password (tanggal lahir, ddmmyyyy)<input name="c" type="password" inputmode="numeric" autocomplete="current-password" required></label>
@@ -66,11 +66,11 @@ function route() {
 function intro(i) {
   stop(); scene('closed');
   const S = [
-    ['Welcome', 'Selamat datang di taman hiburan. Nikmati kunjungan Anda.', 'Jalan-jalan', ''],
+    ['Welcome', 'Selamat datang di DOOR//3. Nikmati kunjungan Anda.', 'Jalan-jalan', ''],
     ['Staff Only', 'Pintu itu seharusnya terkunci.', 'Masuk', 'warn'],
-    ['Backrooms', `Ada ${st.total} ronde. Tiap ronde punya 3 pintu: merah, biru, kuning. Satu benar, dua salah. Tidak ada petunjuk, temukan urutannya sendiri. Posisi dan bentuk pintu terus berubah, jadi ingat warnanya. Salah satu pintu saja, kamu kembali ke awal. Waktu mulai dihitung saat kamu menekan Mulai dan terus berjalan (${mmss(st.limit)}), walau halaman ditutup.`, 'Mulai', '']
+    ['DOOR<span class="sl">//</span>3', `Ada ${st.total} ronde. Tiap ronde punya 3 pintu: merah, biru, kuning. Satu benar, dua salah. Tidak ada petunjuk, temukan urutannya sendiri. Posisi dan bentuk pintu terus berubah, jadi ingat warnanya. Salah satu pintu saja, kamu kembali ke awal. Waktu mulai dihitung saat kamu menekan Mulai dan terus berjalan (${mmss(st.limit)}), walau halaman ditutup.`, 'Mulai', '']
   ][i];
-  app.innerHTML = `<div class="card">${S[3] ? '<div class="tape"></div>' : ''}${SUITS}<h1>${S[0]}</h1><p>${S[1]}</p><button class="btn" id="n">${S[2]}</button>${i === 0 && st.admin ? '<button class="btn alt" id="lb">Leaderboard</button>' : ''}</div>`;
+  app.innerHTML = `<div class="card">${S[3] ? '<div class="tape"></div>' : ''}${SUITS}<h1 class="logo">${S[0]}</h1><p>${S[1]}</p><button class="btn" id="n">${S[2]}</button>${i === 0 && st.admin ? '<button class="btn alt" id="lb">Leaderboard</button>' : ''}</div>`;
   const lb = $('lb'); if (lb) lb.onclick = board;
   $('n').onclick = async () => {
     if (i < 2) return intro(i + 1);
@@ -83,10 +83,12 @@ function game() {
   stop(); scene('game'); busy = false;
   const pips = Array.from({length: st.total}, (_, i) => `<i class="${i < st.round ? 'on' : ''}"></i>`).join('');
   app.innerHTML = `
-    <div class="hud"><div class="watch" id="w"><b id="t"></b></div>
-      <div class="meta">Percobaan <b>${st.attempts}</b><br>Pintu ke-<b>${st.round+1}</b> dari ${st.total}<br>Terlewati <b>${st.cleared}</b></div></div>
-    <div class="pips">${pips}</div>
-    <div class="sw"><div class="stage" id="s"></div><div class="msg" id="m"></div></div>`;
+    <div class="sw"><div class="stage" id="s"></div><div class="msg" id="m"></div></div>
+    <div class="deck">
+      <div class="hud"><div class="watch" id="w"><b id="t"></b></div>
+        <div class="meta">Percobaan <b>${st.attempts}</b><br>Pintu ke-<b>${st.round+1}</b> dari ${st.total}<br>Terlewati <b>${st.cleared}</b></div></div>
+      <div class="pips">${pips}</div>
+    </div>`;
   order = shuffle([0,1,2]);
   const tick = async () => {
     const left = st.limit - (st.elapsed + (Date.now() - st.t0) / 1000);
@@ -107,37 +109,34 @@ const ASP = 1.8;   // tinggi / lebar pintu
 function drawDoors() {
   cancelAnimationFrame(raf);
   const s = $('s'); if (!s) return;
-  const W = s.clientWidth, H = s.clientHeight, r = st.round + 1, R = Math.random;
-  const fl = document.querySelector('.floor');
-  const hz = Math.min(Math.max(fl ? fl.getBoundingClientRect().top - s.getBoundingClientRect().top : H * .6, H * .4), H * .85); // garis cakrawala (dinding/lantai)
-  const FH = H - hz;
+  const M = 22;                                   // jarak aman dari tepi layar (supaya cahaya pintu tidak terpotong)
+  const W = s.clientWidth - 2 * M, H = s.clientHeight, r = st.round + 1, R = Math.random;   // H = tinggi dinding; dasarnya = lantai
   const tier = r <= 5 ? 0 : r <= 10 ? 1 : r <= 15 ? 2 : 3;
   s.classList.toggle('fly', tier === 3);
-  const b = Math.min(W * .28, 124, hz * .8 / ASP);
+  const b = Math.min(W * .29, 130, H * .5 / ASP);
   let d;
   if (tier === 3) {
-    const k = 1 - (r - 16) * .045, bw = Math.max(52, Math.min(W * .21, H * .24, 88) * k);
+    const k = 1 - (r - 16) * .045, bw = Math.max(50, Math.min(W * .22, H * .22, 88) * k);
     d = order.map(() => ({w: bw, h: bw * ASP}));
   } else if (tier === 2) {
-    d = order.map(() => { let w = b * (.62 + R() * .68), h = w * ASP; const m = H * .5; if (h > m) { h = m; w = h / ASP; } return {w, h}; });
+    d = order.map(() => { let w = b * (.62 + R() * .68), h = w * ASP; const m = H * .62; if (h > m) { h = m; w = h / ASP; } return {w, h}; });
   } else d = order.map(() => ({w: b, h: b * ASP}));
 
   let p;
-  if (tier === 0) { const g = (W - 3 * b) / 4; p = d.map((q, i) => ({...q, x: g + i * (b + g), y: hz + FH * .42 - q.h})); }
-  else if (tier === 3) p = d.map(q => ({...q, x: R() * (W - q.w), y: R() * (H - q.h), rot: 0, sc: 1, op: 1}));
-  else p = scatter(W, H, d, q => [Math.max(2, hz + 6 - q.h), Math.max(2, H - 8 - q.h)]);
+  if (tier === 3) p = d.map(q => ({...q, x: R() * (W - q.w), y: R() * (H - q.h), rot: 0, sc: 1, op: 1}));
+  else { const xs = lineup(W, d, tier > 0); p = d.map((q, i) => ({...q, x: xs[i], y: H - q.h})); }   // berdiri di dasar dinding
 
   s.innerHTML = '';
   const els = p.map((q, i) => {
     const c = COLORS[order[i]], e = document.createElement('button');
     e.className = 'dr door'; e.style.cssText = `width:${q.w}px;height:${q.h}px;${doorVars(c, q.w)}`;
-    e.setAttribute('aria-label', 'Pintu ' + c.n); e.innerHTML = doorInner(c.l);
+    e.setAttribute('aria-label', 'Pintu ' + c.n); e.innerHTML = doorInner();
     e.onpointerdown = ev => { ev.preventDefault(); pick(order[i], e); };
     s.appendChild(e); return e;
   });
   const put = () => els.forEach((e, i) => {
     const q = p[i];
-    e.style.transform = `translate3d(${q.x}px,${q.y}px,0)` + (tier === 3 ? ` rotate(${q.rot}deg) scale(${q.sc})` : '');
+    e.style.transform = `translate3d(${q.x + M}px,${q.y}px,0)` + (tier === 3 ? ` rotate(${q.rot}deg) scale(${q.sc})` : '');
     if (tier === 3) e.style.opacity = q.op;
   });
   put();
@@ -212,14 +211,13 @@ function motion(r, p, W, H) {
   };
 }
 
-// Sebar pintu tanpa tumpang tindih. yr(q) -> [yMin, yMax] posisi atas pintu (supaya berdiri di lantai).
-function scatter(W, H, sizes, yr) {
-  const g = 10;
-  for (let t = 0; t < 300; t++) {
-    const r = sizes.map(s => { const [lo, hi] = yr(s); return {...s, x: Math.random() * (W - s.w), y: lo + Math.random() * Math.max(0, hi - lo)}; });
-    if (r.every((a, i) => r.every((c, j) => i >= j || a.x + a.w + g < c.x || c.x + c.w + g < a.x || a.y + a.h + g < c.y || c.y + c.h + g < a.y))) return r;
-  }
-  return sizes.map((s, i) => ({...s, x: i * (W - s.w) / 2, y: yr(s)[0]}));
+// Posisi x tiga pintu dalam satu baris di dasar dinding. irr=false: jarak rata. irr=true: jarak acak (ada yang rapat, ada yang renggang).
+function lineup(W, sizes, irr) {
+  const gmin = 12, tot = sizes.reduce((a, q) => a + q.w, 0);
+  if (!irr) { const g = (W - tot) / 4; let x = g; return sizes.map(q => { const px = x; x += q.w + g; return px; }); }
+  const free = Math.max(0, W - tot - 2 * gmin), wt = [0, 1, 2, 3].map(() => Math.pow(Math.random(), 1.6) + .05), sum = wt.reduce((a, c) => a + c);
+  let x = free * wt[0] / sum;
+  return sizes.map((q, i) => { const px = x; x += q.w + gmin + (i < 2 ? free * wt[i + 1] / sum : 0); return px; });
 }
 
 const msg = t => { const m = $('m'); if (m) m.textContent = t || ''; };
@@ -272,7 +270,7 @@ function result() {
   scene(w ? 'sky' : 'closed');
   app.innerHTML = `<div class="card">${SUITS}
     <h1>${w ? 'Congratulations,' : 'Waktu habis,'}<br>${esc(st.name)}.</h1>
-    <p>${w ? 'Kamu berhasil keluar dari taman.' : 'Kamu masih terjebak di Backrooms.'}</p>
+    <p>${w ? 'Kamu berhasil keluar dari DOOR//3.' : 'Kamu masih terjebak di DOOR//3.'}</p>
     <div class="stats">
       <div><span>Waktu</span><b>${mmss(st.elapsed)}</b></div>
       <div><span>Percobaan</span><b>${st.attempts}</b></div>
