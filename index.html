@@ -3,15 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#12060a">
+<meta name="theme-color" content="#0b0507">
 <title>DOOR//3</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@700&family=Pinyon+Script&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Pinyon+Script&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body data-s="closed">
-<div class="cl" aria-hidden="true"></div><div class="cr" aria-hidden="true"></div>
+<!-- Ruangan: dinding damask + lantai catur -->
+<div class="room" aria-hidden="true"><div class="wall"></div><div class="floor"><i></i></div><div class="vig"></div></div>
+<!-- Langit (muncul di layar akhir) -->
+<div class="sky skybg" aria-hidden="true">
+  <i class="cd" style="--w:150px;--y:9%;--d:70s;--dl:-12s;--o:.95"></i>
+  <i class="cd" style="--w:230px;--y:24%;--d:95s;--dl:-60s;--o:.85"></i>
+  <i class="cd" style="--w:120px;--y:38%;--d:55s;--dl:-30s;--o:.9"></i>
+  <i class="cd" style="--w:280px;--y:55%;--d:110s;--dl:-80s;--o:.8"></i>
+  <i class="cd" style="--w:180px;--y:68%;--d:80s;--dl:-5s;--o:.95"></i>
+  <div class="sea"></div>
+</div>
 <main id="app"></main>
 <script src="config.js"></script>
 <script src="game.js"></script>
