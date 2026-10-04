@@ -124,6 +124,10 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 /* masuk pintu: cahaya hangat menutup layar di akhir zoom (dikendalikan lewat JS) */
 #wash{position:fixed;inset:0;z-index:60;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 50%,#fffbe3,#ffe4a3 55%,#ffcb7a)}
 .room,.sw{will-change:transform}
+/* pratinjau ruangan berikutnya (di dalam .sw, ikut membesar bersama pintu) */
+#nx{position:absolute;left:0;top:0;pointer-events:none;transform-origin:50% 50%;opacity:.01;will-change:transform,opacity}
+.nxs{position:absolute}
+.door.nf{animation:none}
 
 /* ===== HASIL / LEADERBOARD ===== */
 .stats div{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid rgba(201,162,39,.3);padding:9px 0}

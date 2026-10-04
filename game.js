@@ -14,6 +14,12 @@ const scene = s => document.body.dataset.s = s;
 const stop = () => { clearInterval(timer); cancelAnimationFrame(raf); };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Mode ringan: HP lemah memakai transisi cahaya + opacity (tanpa pratinjau ruangan). Paksa lewat ?lite=1 (ringan) atau ?lite=0 (pratinjau ruangan).
+const LITE = (() => {
+  const q = new URLSearchParams(location.search).get('lite');
+  if (q === '1') return true; if (q === '0') return false;
+  return (navigator.deviceMemory || 8) <= 2 || (navigator.hardwareConcurrency || 8) <= 4;
+})();
 const SUITS = '<div class="suits">♠ <span class="r">♥ ♦</span> ♣</div>';
 
 // Isi satu pintu: bingkai, ambang (cahaya/langit), daun pintu 4 panel + kenop. Warna lewat CSS var.
@@ -79,17 +85,19 @@ function intro(i) {
 }
 
 /* ---------- GAME ---------- */
-function game() {
+const metaHTML = () => `Percobaan <b>${st.attempts}</b><br>Pintu ke-<b>${st.round+1}</b> dari ${st.total}<br>Terlewati <b>${st.cleared}</b>`;
+const pipsHTML = () => Array.from({length: st.total}, (_, i) => `<i class="${i < st.round ? 'on' : ''}"></i>`).join('');
+const updateHud = () => { const m = document.querySelector('.meta'), p = document.querySelector('.pips'); if (m) m.innerHTML = metaHTML(); if (p) p.innerHTML = pipsHTML(); };
+
+function game(pl) {                          // pl = rencana ronde yang sudah dipratinjau saat transisi (pintu tidak melompat)
   stop(); scene('game'); busy = false;
-  const pips = Array.from({length: st.total}, (_, i) => `<i class="${i < st.round ? 'on' : ''}"></i>`).join('');
   app.innerHTML = `
     <div class="sw"><div class="stage" id="s"></div><div class="msg" id="m"></div></div>
     <div class="deck">
       <div class="hud"><div class="watch" id="w"><b id="t"></b></div>
-        <div class="meta">Percobaan <b>${st.attempts}</b><br>Pintu ke-<b>${st.round+1}</b> dari ${st.total}<br>Terlewati <b>${st.cleared}</b></div></div>
-      <div class="pips">${pips}</div>
+        <div class="meta">${metaHTML()}</div></div>
+      <div class="pips">${pipsHTML()}</div>
     </div>`;
-  order = shuffle([0,1,2]);
   const tick = async () => {
     const left = st.limit - (st.elapsed + (Date.now() - st.t0) / 1000);
     const t = $('t'); if (!t) return;
@@ -98,7 +106,7 @@ function game() {
     if (left <= 0) { stop(); await rpc('get_state', {p_token: token}); route(); }
   };
   tick(); timer = setInterval(tick, 1000);
-  requestAnimationFrame(drawDoors);
+  if (pl) drawDoors(pl); else requestAnimationFrame(() => drawDoors());
 }
 
 /* Tingkat kesulitan per ronde (dalam satu percobaan):
@@ -107,45 +115,55 @@ function game() {
    16 pantul ala DVD | 17 mengorbit | 18 pantul + berputar | 19 terbang & jatuh (melambung) | 20 kacau (zig-zag, putar, denyut, kedip) */
 const ASP = 1.8;   // tinggi / lebar pintu
 
-function drawDoors() {
-  cancelAnimationFrame(raf);
-  const s = $('s'); if (!s) return;
-  const M = 22;                                   // jarak aman dari tepi layar (supaya cahaya pintu tidak terpotong)
-  const W = s.clientWidth - 2 * M, H = s.clientHeight, r = st.round + 1, R = Math.random;   // H = tinggi dinding; dasarnya = lantai
-  const tier = r <= 5 ? 0 : r <= 10 ? 1 : r <= 15 ? 2 : 3;
-  s.classList.toggle('fly', tier > 0);             // pintu tidak lagi berdiri di lantai: bayangan lantai dimatikan
+const M = 22;                                    // jarak aman dari tepi layar (supaya cahaya pintu tidak terpotong)
+
+// Rencana satu ronde: urutan warna, ukuran, posisi. Dipisah dari penggambaran supaya ruangan berikutnya bisa dipratinjau saat transisi.
+function plan() {
+  const s = $('s'), W = s.clientWidth - 2 * M, H = s.clientHeight, r = st.round + 1, R = Math.random;   // H = tinggi dinding; dasarnya = lantai
+  const tier = r <= 5 ? 0 : r <= 10 ? 1 : r <= 15 ? 2 : 3, ord = shuffle([0,1,2]);
   const b = Math.min(W * .29, 130, H * .5 / ASP);
   let d;
-  if (tier === 3) {
-    const k = 1 - (r - 16) * .045, bw = Math.max(50, Math.min(W * .22, H * .22, 88) * k);
-    d = order.map(() => ({w: bw, h: bw * ASP}));
+  if (tier === 3) {                                // ukuran tiap pintu acak, rata-rata mengecil tiap ronde
+    const k = 1 - (r - 16) * .045, base = Math.min(W * .22, H * .22, 88) * k;
+    d = ord.map(() => { const w = Math.min(Math.max(42, base * (.7 + R() * .7)), H * .5 / ASP); return {w, h: w * ASP}; });
   } else if (tier === 2) {
-    d = order.map(() => { let w = b * (.62 + R() * .68), h = w * ASP; const m = H * .5; if (h > m) { h = m; w = h / ASP; } return {w, h}; });
+    d = ord.map(() => { let w = b * (.62 + R() * .68), h = w * ASP; const m = H * .5; if (h > m) { h = m; w = h / ASP; } return {w, h}; });
   } else if (tier === 1) {
-    d = order.map(() => ({w: b * .92, h: b * .92 * ASP}));
-  } else d = order.map(() => ({w: b, h: b * ASP}));
-
+    d = ord.map(() => ({w: b * .92, h: b * .92 * ASP}));
+  } else d = ord.map(() => ({w: b, h: b * ASP}));
   let p;
   if (tier === 3) p = d.map(q => ({...q, x: R() * (W - q.w), y: R() * (H - q.h), rot: 0, sc: 1, op: 1}));
   else if (tier > 0) p = scatter(W, H, d, tier);
   else { const xs = lineup(W, d); p = d.map((q, i) => ({...q, x: xs[i], y: H - q.h, rot: 0})); }   // berdiri di dasar dinding
+  return {ord, p, tier, W, H};
+}
 
+function doorEl(ci, q, nf) {                     // nf = tanpa animasi muncul (pintu hasil pratinjau sudah terlihat)
+  const c = COLORS[ci], e = document.createElement('button');
+  e.className = 'dr door' + (nf ? ' nf' : ''); e.style.cssText = `width:${q.w}px;height:${q.h}px;${doorVars(c, q.w)}`;
+  e.setAttribute('aria-label', 'Pintu ' + c.n); e.innerHTML = doorInner(); return e;
+}
+const place = (e, q, tier) => {
+  e.style.transform = `translate3d(${q.x + M}px,${q.y}px,0)` + (tier > 0 ? ` rotate(${q.rot}deg)` + (tier === 3 ? ` scale(${q.sc})` : '') : '');
+  if (tier === 3) e.style.opacity = q.op;
+};
+
+function drawDoors(pl) {
+  cancelAnimationFrame(raf);
+  const s = $('s'); if (!s) return;
+  const nf = !!pl; pl = pl || plan();
+  const {ord, p, tier, W, H} = pl; order = ord;
+  s.classList.toggle('fly', tier > 0);             // pintu tidak lagi berdiri di lantai: bayangan lantai dimatikan
   s.innerHTML = '';
   const els = p.map((q, i) => {
-    const c = COLORS[order[i]], e = document.createElement('button');
-    e.className = 'dr door'; e.style.cssText = `width:${q.w}px;height:${q.h}px;${doorVars(c, q.w)}`;
-    e.setAttribute('aria-label', 'Pintu ' + c.n); e.innerHTML = doorInner();
-    e.onpointerdown = ev => { ev.preventDefault(); pick(order[i], e); };
+    const e = doorEl(ord[i], q, nf);
+    e.onpointerdown = ev => { ev.preventDefault(); pick(ord[i], e); };
     s.appendChild(e); return e;
   });
-  const put = () => els.forEach((e, i) => {
-    const q = p[i];
-    e.style.transform = `translate3d(${q.x + M}px,${q.y}px,0)` + (tier > 0 ? ` rotate(${q.rot}deg)` + (tier === 3 ? ` scale(${q.sc})` : '') : '');
-    if (tier === 3) e.style.opacity = q.op;
-  });
+  const put = () => els.forEach((e, i) => place(e, p[i], tier));
   put();
   if (tier === 3) {
-    const step = motion(r, p, W, H);
+    const r = st.round + 1, step = motion(r, p, W, H);
     let t0 = performance.now(), t = 0;
     const loop = n => {
       const dt = Math.min(.05, (n - t0) / 1000); t0 = n; t += dt;
@@ -271,12 +289,16 @@ async function pick(c, el) {
   }
   if (st.status === 'escaped' && d.correct) return win(el);
   if (st.status !== 'playing') return route();
-  if (d.correct) {                           // benar: pintu terbuka, kamera masuk ke ambang pintu, tiba di ronde berikut
+  if (d.correct) {                           // benar: pintu terbuka, kamera masuk ke ruangan berikutnya
     el.classList.remove('pr'); el.classList.add('op');
     if (RM) return game();
+    const pl = plan(), pv = !LITE && preview(pl);   // pv = lapisan pratinjau ruangan berikutnya (null di mode ringan)
+    updateHud();
     await sleep(120);
-    const v = dive(el, 640);
-    await v.done; v.end(); game(); glow(false, 420);   // ruangan lama sudah tertutup cahaya, ruangan baru muncul dari cahaya
+    const v = dive(el, 700, pv ? 'room' : 'wash');
+    await v.done;
+    game(pl); v.end();                       // ruangan asli persis sama dengan pratinjau, jadi pergantiannya tidak terlihat
+    if (!pv) glow(false, 450);               // mode ringan: cahaya memudar ke ruangan baru
     return;
   }
   el.classList.remove('pr'); el.classList.add('bad');   // salah: terkunci, bergetar, reset
@@ -289,43 +311,70 @@ async function pick(c, el) {
 // Pintu terakhir: terbuka ke langit, kamera mendekat dan melewati pintu keluar ke langit
 async function win(el) {
   stop();
-  el.classList.remove('pr'); el.classList.add('sk', 'op');
-  if (!RM) {
-    await sleep(240);
-    const v = dive(el, 1050, true);
-    await v.done;
-    document.body.classList.add('cut'); result(); v.end();
-    setTimeout(() => document.body.classList.remove('cut'), 800);
-  } else { document.body.classList.add('cut'); result(); setTimeout(() => document.body.classList.remove('cut'), 100); }
+  el.classList.remove('pr'); el.classList.add('sk', 'op'); el.style.opacity = 1;
+  if (RM) { document.body.classList.add('cut'); result(); setTimeout(() => document.body.classList.remove('cut'), 100); return; }
+  await sleep(240);
+  const v = dive(el, 1050, 'sky');
+  await v.done;
+  document.body.classList.add('cut'); result(); v.end();
+  setTimeout(() => document.body.classList.remove('cut'), 800);
 }
 
 /* ---------- ANIMASI MASUK PINTU ----------
-   Kamera maju ke ambang pintu: ruangan (.room) dan dinding berisi pintu (.sw) membesar dengan titik pusat di tengah pintu yang dipilih.
-   Hanya transform + opacity (dikerjakan GPU), tanpa gambar, jadi ringan di HP. Skala naik eksponensial supaya terasa seperti berjalan maju.
-   sky=false: layar ditutup cahaya hangat, lalu ruangan baru muncul dari cahaya (glow). sky=true: pintu memudar ke langit asli. */
+   Kamera terbang ke ambang pintu yang dipilih: ruangan lama (.room) dan dinding berisi pintu (.sw) dibesarkan + digeser + diputar (roll)
+   sampai ambang pintu persis memenuhi layar. Hanya transform + opacity (dikerjakan GPU), tanpa gambar.
+   mode 'room': ruangan berikutnya (lapisan #nx, dibuat oleh preview()) ditaruh DI DALAM .sw dan diskalakan sebesar ambang pintu, jadi ikut
+                membesar bersama pintu: kelihatan seperti ruangan sungguhan di balik pintu. Akhirnya #nx = layar penuh = ruangan ronde berikutnya.
+   mode 'wash': (HP lemah) layar ditutup cahaya hangat lalu memudar ke ruangan baru (lihat glow()).
+   mode 'sky' : ambang pintu berisi langit; layer langit asli memudar masuk di akhir. */
 const ZOOM_EASE = 'cubic-bezier(.45,.05,.75,.55)';
-function dive(el, ms, sky) {
-  const r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-  const far = Math.max(Math.hypot(cx, cy), Math.hypot(innerWidth - cx, cy), Math.hypot(cx, innerHeight - cy), Math.hypot(innerWidth - cx, innerHeight - cy));
-  const k = Math.min(34, Math.max(6, 2.1 * far / Math.min(el.offsetWidth * .86, el.offsetHeight * .95)));   // cukup besar agar ambang pintu memenuhi layar
-  const room = document.querySelector('.room'), sw = document.querySelector('.sw'), sr = sw.getBoundingClientRect();
+const roomBox = () => document.querySelector('body > .room').getBoundingClientRect();
+
+// Lapisan ruangan berikutnya: salinan ruangan + pintu ronde berikutnya pada posisi final (koordinat layar). Diletakkan di dalam .sw.
+function preview(pl) {
+  const sw = document.querySelector('.sw'), sr = sw.getBoundingClientRect(), rb = roomBox();
+  const nx = document.createElement('div'); nx.id = 'nx'; nx.setAttribute('aria-hidden', 'true');
+  nx.style.cssText = `width:${rb.width}px;height:${rb.height}px`;
+  nx.innerHTML = '<div class="room"><div class="wall"></div><div class="floor"><i></i></div><div class="vig"></div></div>';
+  const g = document.createElement('div');
+  g.className = 'nxs' + (pl.tier > 0 ? ' fly' : ''); g.style.cssText = `left:${sr.left - rb.left}px;top:${sr.top - rb.top}px;width:${sr.width}px;height:${sr.height}px`;
+  pl.p.forEach((q, i) => { const e = doorEl(pl.ord[i], q, true); e.tabIndex = -1; place(e, q, pl.tier); g.appendChild(e); });
+  nx.appendChild(g); sw.appendChild(nx);
+  return nx;
+}
+
+function dive(el, ms, mode) {
+  const m = new DOMMatrix(getComputedStyle(el).transform), th = Math.atan2(m.b, m.a), sc = Math.hypot(m.a, m.b) || 1;   // sudut + skala pintu saat ini
+  const w = el.offsetWidth * sc * .86, h = el.offsetHeight * sc * .955, off = el.offsetHeight * sc * .0225;           // ukuran ambang (.in) + selisih pusatnya dari pusat pintu
+  const b = el.getBoundingClientRect(), rb = roomBox(), sw = document.querySelector('.sw'), sr = sw.getBoundingClientRect();
+  const cx = b.left + b.width / 2 - Math.sin(th) * off, cy = b.top + b.height / 2 + Math.cos(th) * off;              // pusat ambang di layar
+  const VW = rb.width, VH = rb.height, n0 = Math.min(w / VW, h / VH), k = 1 / n0;                                      // k: skala akhir ambang = memenuhi layar
+  const tx = VW / 2 - cx, ty = VH / 2 - cy;                                                                            // geser supaya ambang berakhir di tengah layar
+  const room = document.querySelector('body > .room'), nx = $('nx');
   room.style.transformOrigin = `${cx}px ${cy}px`;
   sw.style.transformOrigin = `${cx - sr.left}px ${cy - sr.top}px`;
-  const zoom = Array.from({length: 9}, (_, i) => ({transform: `scale(${Math.pow(k, i / 8)})`, offset: i / 8})), o = {duration: ms, easing: ZOOM_EASE, fill: 'forwards'};
-  const lin = {duration: ms, easing: 'linear', fill: 'forwards'}, late = v => [{opacity: v[0], offset: 0}, {opacity: v[0], offset: .6}, {opacity: v[1], offset: 1}];
-  const an = [room.animate(zoom, o), sw.animate(zoom, o)], dk = document.querySelector('.deck');
-  if (dk) an.push(dk.animate([{opacity: 1}, {opacity: 0}], {duration: ms * .3, fill: 'forwards'}));
-  if (sky) {
-    an.push(document.querySelector('.sky').animate(late([0, 1]), lin));
-    an.push(sw.animate(late([1, 0]), lin));
-  } else an.push(glow(true, ms));
+  if (nx) nx.style.transform = `translate(${cx - sr.left - VW / 2}px,${cy - sr.top - VH / 2}px) rotate(${th}rad) scale(${n0})`;   // pas di dalam ambang
+
+  const ss = x => x * x * (3 - 2 * x), N = 8;
+  const cam = Array.from({length: N + 1}, (_, i) => { const u = i / N;     // roll selesai di 75% perjalanan, zoom eksponensial (terasa berjalan maju)
+    return {transform: `translate(${tx * u}px,${ty * u}px) rotate(${-th * ss(Math.min(1, u / .75))}rad) scale(${Math.pow(k, u)})`, offset: u}; });
+  const o = {duration: ms, easing: ZOOM_EASE, fill: 'forwards'}, lin = {duration: ms, easing: 'linear', fill: 'forwards'};
+  const op = (a, b2, at, to) => [{opacity: a, offset: 0}, {opacity: a, offset: at}, {opacity: b2, offset: to}, {opacity: b2, offset: 1}];
+  const an = [room.animate(cam, o)], wait = [];
+  if (mode === 'sky') {                          // fade diikat ke progres zoom (easing sama), bukan waktu: langit baru muncul saat ambang hampir memenuhi layar
+    an.push(sw.animate(cam.map((f, i) => ({...f, opacity: i < N ? 1 : 0})), o));
+    an.push(document.querySelector('.sky').animate(op(0, 1, .72, .93), o));
+    const dk = document.querySelector('.deck'); if (dk) an.push(dk.animate([{opacity: 1}, {opacity: 0}], {duration: ms * .3, fill: 'forwards'}));
+  } else an.push(sw.animate(cam, o));
+  if (mode === 'room' && nx) an.push(nx.animate(op(.01, 1, .04, .38), lin));    // ruangan baru muncul halus dari cahaya di ambang pintu
+  if (mode === 'wash') wait.push(glow(true, ms));
   return {
-    done: Promise.all(an.map(a => a.finished)).catch(() => {}),
-    end: () => { an.forEach(a => { if (a.effect && a.effect.target !== $('wash')) a.cancel(); }); room.style.transformOrigin = ''; }
+    done: Promise.all(an.concat(wait).map(a => a.finished)).catch(() => {}),
+    end: () => { an.forEach(a => a.cancel()); room.style.transformOrigin = ''; }
   };
 }
 
-// Lapisan cahaya hangat layar penuh. cover=true: menutup layar menjelang akhir zoom (tetap menutup). cover=false: membuka lagi.
+// Lapisan cahaya hangat layar penuh (hanya mode ringan). cover=true: menutup layar menjelang akhir zoom. cover=false: memudar membuka ruangan baru.
 function glow(cover, ms) {
   let w = $('wash');
   if (!w) { w = document.createElement('div'); w.id = 'wash'; document.body.appendChild(w); }
