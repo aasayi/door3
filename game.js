@@ -51,7 +51,7 @@ function route() {
 const INTRO = [
   {sign:'WELCOME', text:'Selamat datang di taman hiburan. Nikmati kunjungan Anda.', btn:'Jalan-jalan'},
   {sign:'STAFF ONLY', text:'Pintu ini seharusnya terkunci.', btn:'Masuk'},
-  {sign:'BACKROOMS', text:`Ada 3 pintu: merah, biru, kuning. Satu benar, dua salah. Tidak ada petunjuk, temukan urutannya sendiri. Posisi pintu selalu berubah, jadi ingat warnanya. Salah pintu = kembali ke pintu pertama. Waktu terus berjalan (${mmss(st.limit)}).`, btn:'Mulai'}
+  {sign:'BACKROOMS', text:`Ada 3 pintu: merah, biru, kuning. Satu benar, dua salah. Tidak ada petunjuk, temukan urutannya sendiri. Posisi pintu selalu berubah, jadi ingat warnanya. Salah pintu = kembali ke pintu pertama. Waktu terus berjalan (15 menit).`, btn:'Mulai'}
 ];
 function intro(i) {
   const s = INTRO[i];
