@@ -50,9 +50,10 @@ function intro(i) {
   const S = [
     ['Welcome', 'Selamat datang di taman hiburan. Nikmati kunjungan Anda.', 'Jalan-jalan', ''],
     ['Staff Only', 'Pintu itu seharusnya terkunci.', 'Masuk', 'warn'],
-    ['Backrooms', `Ada ${st.total} ronde. Tiap ronde punya 3 pintu: merah, biru, kuning. Satu benar, dua salah. Tidak ada petunjuk, temukan urutannya sendiri. Posisi dan bentuk pintu terus berubah, jadi ingat warnanya. Salah satu pintu saja, kamu kembali ke awal. Waktu terus berjalan (${mmss(st.limit)}).`, 'Mulai', '']
+    ['Backrooms', `Ada ${st.total} ronde. Tiap ronde punya 3 pintu: merah, biru, kuning. Satu benar, dua salah. Tidak ada petunjuk, temukan urutannya sendiri. Posisi dan bentuk pintu terus berubah, jadi ingat warnanya. Salah satu pintu saja, kamu kembali ke awal. Waktu mulai dihitung saat kamu menekan Mulai dan terus berjalan (${mmss(st.limit)}), walau halaman ditutup.`, 'Mulai', '']
   ][i];
-  app.innerHTML = `<div class="card ${S[3]}">${SUITS}<h1>${S[0]}</h1><p>${S[1]}</p><button class="btn" id="n">${S[2]}</button></div>`;
+  app.innerHTML = `<div class="card ${S[3]}">${SUITS}<h1>${S[0]}</h1><p>${S[1]}</p><button class="btn" id="n">${S[2]}</button>${i === 0 && st.admin ? '<button class="btn alt" id="lb">Leaderboard</button>' : ''}</div>`;
+  const lb = document.getElementById('lb'); if (lb) lb.onclick = board;
   document.getElementById('n').onclick = async () => {
     if (i < 2) return intro(i + 1);
     try { await rpc('start_game', {p_token: token}); route(); } catch (x) { alert(x.message); }
@@ -154,7 +155,28 @@ function result() {
       <div><span>Pintu terlewati</span><b>${st.cleared}</b></div>
       <div><span>Session ID</span><b>DR-${esc(st.code)}</b></div>
     </div>
-    <p class="mute">Screenshot halaman ini dan kirim ke admin.</p></div>`;
+    <p class="mute">Screenshot halaman ini dan kirim ke admin.</p>${st.admin ? '<button class="btn alt" id="lb">Leaderboard</button>' : ''}</div>`;
+  const lb = document.getElementById('lb'); if (lb) lb.onclick = board;
+}
+
+// Leaderboard (khusus admin; server menolak akun non-admin)
+function board() {
+  stop(); scene('closed');
+  app.innerHTML = `<div class="card">${SUITS}<h1>Leaderboard</h1><div id="lbl" class="mute">Memuat...</div>
+    <button class="btn" id="rf">Segarkan</button><button class="btn alt" id="bk">Kembali</button></div>`;
+  const el = document.getElementById('lbl');
+  const draw = async () => {
+    try {
+      const d = await rpc('leaderboard', {p_token: token});
+      if (d.error) throw new Error(d.error);
+      el.className = '';
+      el.innerHTML = d.rows.map((r, i) => `<div class="lb"><span>${i+1}</span><b>${esc(r.name)}</b>
+        <span>${r.result === 'escaped' ? mmss(r.elapsed) : r.result === 'playing' ? 'main' : 'habis'}<small>${r.cleared} pintu, ${r.attempts}x</small></span></div>`).join('') || '<p class="mute">Belum ada yang main.</p>';
+    } catch (x) { el.textContent = x.message; }
+  };
+  draw(); timer = setInterval(draw, 10000);
+  document.getElementById('rf').onclick = draw;
+  document.getElementById('bk').onclick = () => route();
 }
 
 loginScreen();

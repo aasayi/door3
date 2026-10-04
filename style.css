@@ -43,3 +43,6 @@ box-shadow:0 0 0 2px #4d3606,0 0 22px rgba(255,205,110,.4),inset 0 0 0 5px rgba(
 @keyframes shake{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
 @keyframes pulse{50%{box-shadow:0 0 0 3px #5b4208,0 0 24px 6px #d4202c}}
 @media (prefers-reduced-motion:reduce){.flash,.watch.low{animation:none}.cl,.cr{transition:none}}
+.btn.alt{background:transparent;color:var(--wine);border-color:var(--wine)}
+.lb{display:grid;grid-template-columns:1.6em 1fr auto;gap:8px;align-items:baseline;border-top:1px solid rgba(74,10,20,.3);padding:8px 0}
+.lb small{display:block;text-align:right;opacity:.65;font-size:12px}
