@@ -343,6 +343,32 @@ async function win(el) {
                 membesar bersama pintu: kelihatan seperti ruangan sungguhan di balik pintu. Akhirnya #nx = layar penuh = ruangan ronde berikutnya.
    mode 'wash': (HP lemah) layar ditutup cahaya hangat lalu memudar ke ruangan baru (lihat glow()).
    mode 'sky' : ambang pintu berisi langit; layer langit asli memudar masuk di akhir. */
+
+/* Animasi kamera digerakkan JS (rAF), bukan WAAPI: dengan WAAPI, Chrome menggambar ulang (raster) layer raksasa di skala animasi terbesar
+   sehingga HP kewalahan saat zoom-in. Dengan transform inline + will-change, layer digambar sekali dan GPU cuma menskalakannya.
+   Bentuk keyframe sama persis dengan WAAPI: {transform:'translate(..px,..px) rotate(..rad) scale(..)', opacity, offset}. */
+function bez(x1, y1, x2, y2) {
+  const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx, cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+  const X = t => ((ax * t + bx) * t + cx) * t, Y = t => ((ay * t + by) * t + cy) * t;
+  return x => { let t = x; for (let i = 0; i < 8; i++) { const e = X(t) - x, d = (3 * ax * t + 2 * bx) * t + cx; if (Math.abs(e) < 1e-5 || Math.abs(d) < 1e-6) break; t -= e / d; } return Y(Math.min(1, Math.max(0, t))); };
+}
+const EZ = bez(.45, .05, .75, .55);
+function tween(el, kf, o) {
+  const lin = o.easing === 'linear', rev = o.direction === 'reverse', num = /-?\d*\.?\d+(?:e[-+]?\d+)?/gi;
+  const K = kf.map(f => ({off: f.offset, op: f.opacity, tr: f.transform ? f.transform.match(num).map(Number) : null}));
+  const hasTr = K.some(k => k.tr), hasOp = K.some(k => k.op !== undefined);
+  let raf, t0, res; const fin = new Promise(r => res = r);
+  const apply = p => {
+    let i = 0; while (i < K.length - 2 && p > K[i + 1].off) i++;
+    const a = K[i], b = K[i + 1], q = (p - a.off) / ((b.off - a.off) || 1);
+    if (a.tr) { const v = a.tr.map((x, j) => x + (b.tr[j] - x) * q); el.style.transform = `translate(${v[0]}px,${v[1]}px) rotate(${v[2]}rad) scale(${v[3]})`; }
+    if (a.op !== undefined) el.style.opacity = a.op + (b.op - a.op) * q;
+  };
+  const at = t => { const d = rev ? 1 - t : t; return lin ? d : EZ(d); };       // arah dibalik dulu, baru easing (sama seperti WAAPI)
+  const step = n => { t0 = t0 || n; const t = Math.min(1, (n - t0) / o.duration); apply(at(t)); if (t < 1) raf = requestAnimationFrame(step); else res(); };
+  apply(at(0)); raf = requestAnimationFrame(step);
+  return {finished: fin, cancel() { cancelAnimationFrame(raf); if (hasTr) el.style.transform = ''; if (hasOp) el.style.opacity = ''; res(); }};
+}
 const ZOOM_EASE = 'cubic-bezier(.45,.05,.75,.55)';
 const roomBox = () => document.querySelector('body > .room').getBoundingClientRect();
 
@@ -378,13 +404,13 @@ function dive(el, ms, mode) {
   const back = mode === 'back';                // 'back' = rewind: animasi yang sama diputar mundur (keluar dari ruangan)
   const o = {duration: ms, easing: ZOOM_EASE, fill: back ? 'both' : 'forwards', direction: back ? 'reverse' : 'normal'}, lin = {duration: ms, easing: 'linear', fill: 'forwards'};
   const op = (a, b2, at, to) => [{opacity: a, offset: 0}, {opacity: a, offset: at}, {opacity: b2, offset: to}, {opacity: b2, offset: 1}];
-  const an = [room.animate(cam, o)], wait = [];
+  const an = [tween(room, cam, o)], wait = [];
   if (mode === 'sky') {                          // fade diikat ke progres zoom (easing sama), bukan waktu: langit baru muncul saat ambang hampir memenuhi layar
-    an.push(sw.animate(cam.map((f, i) => ({...f, opacity: i < N ? 1 : 0})), o));
+    an.push(tween(sw, cam.map((f, i) => ({...f, opacity: i < N ? 1 : 0})), o));
     an.push(document.querySelector('.sky').animate(op(0, 1, .72, .93), o));
     const dk = document.querySelector('.deck'); if (dk) an.push(dk.animate([{opacity: 1}, {opacity: 0}], {duration: ms * .3, fill: 'forwards'}));
-  } else an.push(sw.animate(cam, o));
-  if (mode === 'room' && nx) an.push(nx.animate(op(.01, 1, .04, .38), lin));    // ruangan baru muncul halus dari cahaya di ambang pintu
+  } else an.push(tween(sw, cam, o));
+  if (mode === 'room' && nx) an.push(tween(nx, op(.01, 1, .04, .38), lin));    // ruangan baru muncul halus dari cahaya di ambang pintu
   if (mode === 'wash') wait.push(glow(true, ms));
   return {
     done: Promise.all(an.concat(wait).map(a => a.finished)).catch(() => {}),
