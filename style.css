@@ -135,6 +135,16 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 /* glow pintu benar: box-shadow (digambar sekali), bukan filter drop-shadow (digambar ulang tiap frame saat zoom) */
 .door.op{filter:none}
 .door.op .fr{box-shadow:inset 0 0 0 2px rgba(0,0,0,.4),inset 0 0 0 4px rgba(255,255,255,.12),inset 0 0 0 6px rgba(0,0,0,.18),0 0 20px 7px rgba(255,214,140,.55),0 10px 24px rgba(0,0,0,.7)}
+/* portal cahaya (mode ?z=portal): satu layer polos + bingkai pintu (warna & tebal diisi lewat JS) */
+#nx.glowbg{background:radial-gradient(ellipse at 50% 58%,#fff0b8 0,#f6b660 40%,#e08c3a 100%)}
+#nx.glowbg.dark{background:#050203}
+#nx .rg{position:absolute;pointer-events:none;background:var(--rc,#d4202c)}
+#nx .rg.l,#nx .rg.r{background:linear-gradient(90deg,var(--rd,#82111a),var(--rc,#d4202c) 38%,var(--rc,#d4202c) 62%,var(--rd,#82111a))}
+#nx .rg.t,#nx .rg.b{background:linear-gradient(180deg,var(--rd,#82111a),var(--rc,#d4202c) 38%,var(--rc,#d4202c) 62%,var(--rd,#82111a))}
+#nx .rg.t{left:calc(var(--fs,34px)*-1);right:calc(var(--fs,34px)*-1);top:calc(var(--ft,38px)*-1);height:var(--ft,38px)}
+#nx .rg.b{left:calc(var(--fs,34px)*-1);right:calc(var(--fs,34px)*-1);bottom:calc(var(--fb,0px)*-1);height:var(--fb,0px)}
+#nx .rg.l{left:calc(var(--fs,34px)*-1);top:0;bottom:0;width:var(--fs,34px)}
+#nx .rg.r{right:calc(var(--fs,34px)*-1);top:0;bottom:0;width:var(--fs,34px)}
 /* efek rewind: tinta biru tipis + garis scan + pita yang menyapu ke atas */
 #rw{position:fixed;inset:0;z-index:5;pointer-events:none;opacity:0;overflow:hidden;background:repeating-linear-gradient(0deg,rgba(0,0,0,.2) 0 1px,transparent 1px 3px),rgba(70,110,200,.2)}
 #rw i{position:absolute;left:0;right:0;top:0;height:18%;background:linear-gradient(transparent,rgba(255,255,255,.3) 50%,transparent)}
