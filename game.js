@@ -16,9 +16,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 // Warna penutup di dalam pintu saat zoom: 'glow' (cahaya hangat, sama dengan isi ambang pintu) atau 'dark' (hitam).
 const VEIL = 'glow';
-// Cara masuk pintu (ganti lewat URL): ?z=portal (cahaya tumbuh dari ambang, ruangan lama diam, DEFAULT) | ?z=cam (kamera zoom ruangan lama) | ?z=fade (tanpa zoom, hanya cahaya naik-turun)
+// Cara masuk pintu (ganti lewat URL): ?z=portal (cahaya tumbuh bertahap dari ambang pintu, ruangan lama diam, DEFAULT) | ?z=fade (tanpa zoom, hanya cahaya berkedip)
 const ZQ = new URLSearchParams(location.search).get('z');
-let ZM = ['portal', 'cam', 'fade'].includes(ZQ) ? ZQ : 'portal', slow = 0;
+let ZM = ['portal', 'fade'].includes(ZQ) ? ZQ : 'portal', slow = 0;
 const SUITS = '<div class="suits">♠ <span class="r">♥ ♦</span> ♣</div>';
 
 // Isi satu pintu: bingkai, ambang (cahaya/langit), daun pintu 4 panel + kenop. Warna lewat CSS var.
@@ -303,22 +303,16 @@ async function pick(c, el) {
     if (RM) { updateHud(); return enter(pl); }
     updateHud();
     await sleep(120);
-    const fw = frameWatch();
+    const fw = frameWatch(), sw = document.querySelector('.sw');
     if (ZM === 'portal') {
-      const v = portalDive(el, 700);         // cahaya (dengan bingkai pintu) tumbuh dari ambang sampai memenuhi layar; ruangan lama TIDAK ikut dibesarkan
+      const v = portalDive(el, 680);         // cahaya + bingkai pintu "melompat" membesar dari ambang sampai memenuhi layar; ruangan lama TIDAK dibesarkan
       await v.done; guard(fw());
       v.hold(); enter(pl);                   // layar tertutup penuh: ruangan baru digambar diam-diam di bawahnya
       await frames(2);
-      v.out(450);                            // penutup memudar ke opacity 0
-    } else if (ZM === 'fade') {
-      await glow(true, 380, 0).finished.catch(() => {}); guard(fw());   // tanpa zoom: cahaya naik, ganti ruangan, cahaya turun
-      enter(pl); await frames(2); glow(false, 450);
+      v.out(); jolt(sw, 320, 6, 7);          // penutup berkedip hilang, ruangan baru "tersentak" sebentar
     } else {
-      const v = dive(el, 700, 'wash');       // kamera zoom ruangan lama (seperti zip lama), penutup cahaya naik menjelang akhir
-      await v.done; guard(fw());
-      v.end(); enter(pl);
-      await frames(2);
-      glow(false, 450);
+      await glow(true, 380).finished.catch(() => {}); guard(fw());   // mode ringan: cahaya berkedip naik, ganti ruangan, berkedip turun
+      enter(pl); await frames(2); glow(false, 380); jolt(sw, 320, 6, 7);
     }
     return;
   }
@@ -337,135 +331,101 @@ async function win(el) {
   el.classList.remove('pr'); el.classList.add('sk', 'op'); el.style.opacity = 1;
   if (RM) { document.body.classList.add('cut'); result(); setTimeout(() => document.body.classList.remove('cut'), 100); return; }
   await sleep(240);
-  const v = dive(el, 1050, 'sky');
-  await v.done;
-  document.body.classList.add('cut'); result(); v.end();
-  setTimeout(() => document.body.classList.remove('cut'), 800);
+  const dk = document.querySelector('.deck'); if (dk) dk.animate([{opacity: 1}, {opacity: 0}], {duration: 320, fill: 'forwards'});
+  const v = portalDive(el, 980, 'sky');
+  await v.done; v.hold();
+  document.body.classList.add('cut'); result();   // langit asli (awan) terbuka di bawah portal
+  v.out(); setTimeout(() => document.body.classList.remove('cut'), 800);
 }
 
-/* ---------- ANIMASI MASUK PINTU ----------
-   Kamera terbang ke ambang pintu yang dipilih: ruangan lama (.room) dan dinding berisi pintu (.sw) dibesarkan + digeser + diputar (roll)
-   sampai ambang pintu persis memenuhi layar. Hanya transform + opacity (dikerjakan GPU).
-   Ambang pintu berisi cahaya (atau hitam), BUKAN ruangan berikutnya, jadi HP tidak perlu menggambar dua ruangan sekaligus.
-   mode 'wash': penutup layar penuh (#wash, cahaya atau hitam) naik ke opacity 100% menjelang akhir zoom. Setelah layar tertutup penuh,
-                ruangan baru digambar di bawahnya, lalu penutup memudar ke opacity 0 (lihat glow()).
-   mode 'sky' : ambang pintu berisi langit; layer langit asli memudar masuk di akhir.
-   mode 'back': rewind, animasi yang sama diputar mundur. */
-const ZOOM_EASE = 'cubic-bezier(.45,.05,.75,.55)';
+/* ---------- ANIMASI & GLITCH ----------
+   Prinsip: semua efek hanya transform + opacity pada layer yang sudah ada (tanpa filter, blur, atau gambar ulang), dan dipotong jadi lompatan
+   bertahap (steps). Glitch ini disengaja: terasa seperti "kami tidak seharusnya di sini". Kalau HP sempat patah-patah, patahnya menyatu dengan gayanya.
+   Ruangan lama tidak pernah dibesarkan/diskalakan (itu yang bikin HP menggambar ulang terus). */
+const ZOOM_EASE = 'cubic-bezier(.45,.05,.75,.55)', STEP = 'steps(1, end)';
 const roomBox = () => document.querySelector('body > .room').getBoundingClientRect();
-
-// Lapisan ruangan: salinan ruangan (dinding+lantai) + deretan pintu pada posisi layar, diletakkan di dalam .sw (ikut bergerak bersama kamera).
-function layer(doors, fly) {
-  const sw = document.querySelector('.sw'), sr = sw.getBoundingClientRect(), rb = roomBox();
-  const nx = document.createElement('div'); nx.id = 'nx'; nx.setAttribute('aria-hidden', 'true');
-  nx.style.cssText = `width:${rb.width}px;height:${rb.height}px`;
-  nx.innerHTML = '<div class="room"><div class="wall"></div><div class="floor"><i></i></div><div class="vig"></div></div>';
-  const g = document.createElement('div');
-  g.className = 'nxs' + (fly ? ' fly' : ''); g.style.cssText = `left:${sr.left - rb.left}px;top:${sr.top - rb.top}px;width:${sr.width}px;height:${sr.height}px`;
-  doors.forEach(e => g.appendChild(e));
-  nx.appendChild(g); sw.appendChild(nx);
-  return nx;
-}
-
-function dive(el, ms, mode) {
-  const m = new DOMMatrix(getComputedStyle(el).transform), th = Math.atan2(m.b, m.a), sc = Math.hypot(m.a, m.b) || 1;   // sudut + skala pintu saat ini
-  const w = el.offsetWidth * sc * .86, h = el.offsetHeight * sc * .955, off = el.offsetHeight * sc * .0225;           // ukuran ambang (.in) + selisih pusatnya dari pusat pintu
-  const b = el.getBoundingClientRect(), rb = roomBox(), sw = document.querySelector('.sw'), sr = sw.getBoundingClientRect();
-  const cx = b.left + b.width / 2 - Math.sin(th) * off, cy = b.top + b.height / 2 + Math.cos(th) * off;              // pusat ambang di layar
-  const VW = rb.width, VH = rb.height, n0 = Math.min(w / VW, h / VH), k = 1 / n0;                                      // k: skala akhir ambang = memenuhi layar
-  const tx = VW / 2 - cx, ty = VH / 2 - cy;                                                                            // geser supaya ambang berakhir di tengah layar
-  const room = document.querySelector('body > .room'), nx = $('nx');
-  room.style.transformOrigin = `${cx}px ${cy}px`;
-  sw.style.transformOrigin = `${cx - sr.left}px ${cy - sr.top}px`;
-  if (nx) nx.style.transform = `translate(${cx - sr.left - VW / 2}px,${cy - sr.top - VH / 2}px) rotate(${th}rad) scale(${n0})`;   // pas di dalam ambang
-
-  const ss = x => x * x * (3 - 2 * x), N = 8;
-  const cam = Array.from({length: N + 1}, (_, i) => { const u = i / N;     // roll selesai di 75% perjalanan, zoom eksponensial (terasa berjalan maju)
-    return {transform: `translate(${tx * u}px,${ty * u}px) rotate(${-th * ss(Math.min(1, u / .75))}rad) scale(${Math.pow(k, u)})`, offset: u}; });
-  const back = mode === 'back';                // 'back' = rewind: animasi yang sama diputar mundur (keluar dari ruangan)
-  const o = {duration: ms, easing: ZOOM_EASE, fill: back ? 'both' : 'forwards', direction: back ? 'reverse' : 'normal'};
-  const op = (a, b2, at, to) => [{opacity: a, offset: 0}, {opacity: a, offset: at}, {opacity: b2, offset: to}, {opacity: b2, offset: 1}];
-  const an = [room.animate(cam, o)], wait = [];
-  if (mode === 'sky') {                          // fade diikat ke progres zoom (easing sama), bukan waktu: langit baru muncul saat ambang hampir memenuhi layar
-    an.push(sw.animate(cam.map((f, i) => ({...f, opacity: i < N ? 1 : 0})), o));
-    an.push(document.querySelector('.sky').animate(op(0, 1, .72, .93), o));
-    const dk = document.querySelector('.deck'); if (dk) an.push(dk.animate([{opacity: 1}, {opacity: 0}], {duration: ms * .3, fill: 'forwards'}));
-  } else an.push(sw.animate(cam, o));
-  if (mode === 'wash') wait.push(glow(true, ms));
-  return {
-    done: Promise.all(an.concat(wait).map(a => a.finished)).catch(() => {}),
-    end: () => { an.forEach(a => a.cancel()); room.style.transformOrigin = ''; sw.style.transformOrigin = ''; }
-  };
-}
-
 const RING = '<i class="rg t"></i><i class="rg l"></i><i class="rg r"></i><i class="rg b"></i>';
+const rnd = (a, b) => a + Math.random() * (b - a), sgn = () => Math.random() < .5 ? -1 : 1;
+
+// Opacity berkedip bertahap: tiap nilai ditahan sampai nilai berikutnya (tidak ada transisi halus).
+const flick = (el, vals, ms) => el.animate(vals.map((o, i) => ({opacity: o, offset: i / (vals.length - 1), easing: STEP})), {duration: ms, fill: 'forwards'});
+
+// Tersentak: layer digeser/dimiringkan sedikit secara acak, sebagian frame kembali normal, getarannya meluruh. Hanya transform.
+function jolt(el, ms, n = 8, amp = 8) {
+  if (!el || RM) return;
+  const kf = Array.from({length: n}, (_, i) => { const d = 1 - i / n;
+    return {offset: i / n, easing: STEP, transform: i % 3 === 2 ? 'none' : `translate(${sgn() * rnd(.4, 1) * amp * d}px,${sgn() * rnd(0, .3) * amp * d}px) skewX(${sgn() * rnd(0, 2.5) * d}deg)`}; });
+  kf.push({offset: 1, transform: 'none'});
+  return el.animate(kf, {duration: ms});
+}
 
 // Pengaman: kalau animasi patah-patah dua kali berturut-turut, pindah ke mode 'fade' (tanpa zoom) untuk sisa permainan (kecuali dipaksa lewat ?z=).
 const frameWatch = () => { let last = 0, bad = 0, n = 0, id; const f = t => { if (last) { n++; if (t - last > 34) bad++; } last = t; id = requestAnimationFrame(f); }; id = requestAnimationFrame(f); return () => { cancelAnimationFrame(id); return n > 8 && bad / n > .2; }; };
 const guard = jank => { slow = jank ? slow + 1 : 0; if (slow >= 2 && !ZQ) ZM = 'fade'; };
 
-// Mode 'portal': satu lapisan cahaya seukuran layar, tumbuh dari ambang pintu yang dipilih (roll + zoom eksponensial seperti kamera), lengkap dengan bingkai pintu.
-// Ruangan lama tidak diskalakan sama sekali, jadi tidak ada yang digambar ulang: hanya transform + opacity dari satu layer sederhana.
-function portalDive(el, ms) {
+// Masuk pintu: satu lapisan polos seukuran layar (cahaya, atau langit untuk pintu terakhir) tumbuh dari ambang pintu yang dipilih lengkap dengan bingkai pintu.
+// Zoom dipotong jadi lompatan (stutter sengaja, sekali mundur sedikit), makin rapat menjelang akhir, dan lapisan sempat berkedip saat muncul.
+function portalDive(el, ms, kind = 'glow') {
   const m = new DOMMatrix(getComputedStyle(el).transform), th = Math.atan2(m.b, m.a), sc = Math.hypot(m.a, m.b) || 1;
   const dw = el.offsetWidth * sc, dh = el.offsetHeight * sc, off = dh * .0225;                                         // ukuran pintu + selisih pusat ambang dari pusat pintu
   const b = el.getBoundingClientRect(), rb = roomBox(), sw = document.querySelector('.sw'), sr = sw.getBoundingClientRect();
   const cx = b.left + b.width / 2 - Math.sin(th) * off, cy = b.top + b.height / 2 + Math.cos(th) * off;              // pusat ambang di layar
   const VW = rb.width, VH = rb.height, n0 = Math.min(dw * .86 / VW, dh * .955 / VH);                                   // n0: skala portal supaya pas di dalam ambang
-  const tx = cx - rb.left - VW / 2, ty = cy - rb.top - VH / 2;
-  const nx = document.createElement('div'); nx.id = 'nx'; nx.className = 'glowbg' + (VEIL === 'dark' ? ' dark' : ''); nx.setAttribute('aria-hidden', 'true');
-  nx.style.cssText = `left:${rb.left - sr.left}px;top:${rb.top - sr.top}px;width:${rb.width}px;height:${rb.height}px`;
+  const tx = cx - rb.left - VW / 2, ty = cy - rb.top - VH / 2, sky = kind === 'sky';
+  const nx = document.createElement('div'); nx.id = 'nx'; nx.className = sky ? 'skybg' : 'glowbg' + (VEIL === 'dark' ? ' dark' : ''); nx.setAttribute('aria-hidden', 'true');
+  nx.style.cssText = sky ? `position:fixed;z-index:2;left:${rb.left}px;top:${rb.top}px;width:${VW}px;height:${VH}px`   // langit: menempel di body supaya selamat saat layar hasil menggantikan #app
+                         : `left:${rb.left - sr.left}px;top:${rb.top - sr.top}px;width:${VW}px;height:${VH}px`;
   const cs = getComputedStyle(el), ns = nx.style;
   ns.setProperty('--rc', cs.getPropertyValue('--c') || '#d4202c'); ns.setProperty('--rd', cs.getPropertyValue('--cd') || '#82111a');   // bingkai = bingkai pintu yang dipilih
   ns.setProperty('--fs', Math.max(0, (dw - VW * n0) / 2 / n0) + 'px');
   ns.setProperty('--ft', Math.max(0, (dh / 2 + off - VH * n0 / 2) / n0) + 'px');
   ns.setProperty('--fb', Math.max(0, (dh / 2 - off - VH * n0 / 2) / n0) + 'px');
-  nx.innerHTML = RING; sw.appendChild(nx);
-  const ss = x => x * x * (3 - 2 * x), N = 8;
-  const cam = Array.from({length: N + 1}, (_, i) => { const u = i / N, r = 1 - u;
-    return {transform: `translate(${tx * r}px,${ty * r}px) rotate(${th * (1 - ss(Math.min(1, u / .75)))}rad) scale(${Math.pow(n0, r)})`, offset: u}; });
+  nx.innerHTML = RING; (sky ? document.body : sw).appendChild(nx);
+  const ss = x => x * x * (3 - 2 * x), N = 9, bk = 2 + Math.floor(Math.random() * 3);   // bk: lompatan yang mundur sedikit
+  const cam = Array.from({length: N + 1}, (_, i) => { let u = i / N; if (i === bk) u -= .07; const r = 1 - u;
+    return {offset: i / N, easing: STEP, transform: `translate(${tx * r}px,${ty * r}px) rotate(${th * (1 - ss(Math.min(1, u / .75)))}rad) scale(${Math.pow(n0, r)})`}; });
   const an = [nx.animate(cam, {duration: ms, easing: ZOOM_EASE, fill: 'forwards'}),
-              nx.animate([{opacity: .01, offset: 0}, {opacity: .01, offset: .04}, {opacity: 1, offset: .38}, {opacity: 1, offset: 1}], {duration: ms, easing: 'linear', fill: 'forwards'})];
+              nx.animate([{opacity: .01, offset: 0}, {opacity: .01, offset: .04}, {opacity: 1, offset: .16}, {opacity: .45, offset: .24}, {opacity: 1, offset: .3}, {opacity: 1, offset: 1}], {duration: ms, easing: 'linear', fill: 'forwards'})];
   return {
     done: Promise.all(an.map(a => a.finished)).catch(() => {}),
-    hold: () => { ns.opacity = 1; ns.transform = 'none'; an.forEach(a => a.cancel()); },
-    out: t => nx.animate([{opacity: 1}, {opacity: 0}], {duration: t, easing: 'ease-out', fill: 'forwards'}).finished.then(() => nx.remove(), () => nx.remove())
+    hold: () => { ns.opacity = 1; ns.transform = 'none'; an.forEach(a => a.cancel()); },                                      // penuh layar, diam
+    out: () => flick(nx, [1, .25, .9, .4, .75, .1, 0], 380).finished.then(() => nx.remove(), () => nx.remove())               // berkedip lalu hilang
   };
 }
 
 /* ---------- REWIND (salah pintu) ----------
-   Kebalikan dari masuk pintu: ruangan yang sedang kita tempati (klon persis layar sekarang) menyusut ke dalam salah satu pintu ruangan
-   pertama, kamera mundur keluar. Ruangan pertama sudah jadi ruangan asli di bawahnya, jadi tidak ada pergantian layar di akhir.
-   Bonus: filter pita VHS (overlay tipis) + angka "Pintu ke-N" di panel menghitung mundur ke 1. Hanya transform + opacity. */
+   Glitch ala pita video rusak, bukan zoom mundur: layar tersentak-sentak (ruangan dan dinding bergeser berlawanan arah), garis scan + pita menyapu,
+   bar sobekan (putih / cyan / magenta) loncat-loncat, angka "Pintu ke-N" menghitung mundur dengan bayangan RGB. Di tengah ada kilat putih singkat:
+   saat itu ruangan 1 diganti diam-diam (potongan keras tertutup kilat). Semua transform + opacity, tidak ada filter. Total 0,9 detik. */
 async function rewind(was) {
-  const s = $('s'), sw = document.querySelector('.sw'); if (!s || !sw) return;
-  const ms = 820;
+  const s = $('s'), sw = document.querySelector('.sw'), room = document.querySelector('body > .room'); if (!s || !sw) return;
+  const ms = 900, cut = Math.round(ms * .46), H = innerHeight;
   s.classList.remove('flash'); msg('');
-  const clones = Array.from(s.children).map(e => { const c = e.cloneNode(true); c.classList.remove('bad', 'pr', 'op'); c.classList.add('nf'); c.tabIndex = -1; return c; });
-  const nx = layer(clones, s.classList.contains('fly')); nx.style.opacity = 1;      // ruangan lama, menutupi layar persis seperti sebelumnya
-  const pl = plan(); drawDoors(pl);                                                // ruangan asli di bawahnya = ronde 1 (state server sudah di-reset)
-  const els = Array.from(s.children), D = els[Math.floor(Math.random() * els.length)]; D.classList.add('op');   // pintu yang kita keluari
-  const rw = document.createElement('div'); rw.id = 'rw'; rw.innerHTML = '<i></i>'; document.body.appendChild(rw);
-  rw.animate([{opacity: 0}, {opacity: 1, offset: .15}, {opacity: 1, offset: .8}, {opacity: 0}], {duration: ms, easing: 'linear', fill: 'forwards'});
+  const rw = document.createElement('div'); rw.id = 'rw'; rw.innerHTML = '<i></i><b></b><b></b><b></b><u></u>';
+  document.body.appendChild(rw); document.body.classList.add('gl');
+  rw.animate([{opacity: 0}, {opacity: 1, offset: .12}, {opacity: 1, offset: .85}, {opacity: 0}], {duration: ms, easing: 'linear', fill: 'forwards'});
   rw.firstChild.animate([{transform: 'translateY(105vh)'}, {transform: 'translateY(-25vh)'}], {duration: ms / 2, iterations: 2, easing: 'linear'});
-  const v = dive(D, ms, 'back');
+  rw.querySelectorAll('b').forEach(bar => {                                          // bar sobekan: tinggi acak, loncat ke posisi acak tiap langkah, sebagian langkah hilang
+    bar.style.height = rnd(2.5, 7) + '%';
+    bar.animate(Array.from({length: 10}, (_, i) => ({offset: i / 10, easing: STEP, opacity: Math.random() < .35 ? 0 : 1, transform: `translate(${sgn() * rnd(0, 26)}px,${rnd(0, H * .92)}px)`})).concat({offset: 1, opacity: 0}), {duration: ms});
+  });
+  rw.querySelector('u').animate([{opacity: 0, offset: 0}, {opacity: .9, offset: .4, easing: STEP}, {opacity: 0, offset: .5, easing: STEP}, {opacity: .35, offset: .56, easing: STEP}, {opacity: 0, offset: .6}], {duration: ms});   // kilat putih: menutupi pergantian ruangan di detik ke-cut
+  jolt(sw, ms, 16, 12); jolt(room, ms, 14, 9);
+  setTimeout(() => drawDoors(plan()), cut);                                           // ruangan 1 (state server sudah di-reset), diganti saat layar tertutup kilat
   let last = -1; const t0 = performance.now();
-  const tk = n => { const u = Math.min(1, (n - t0) / ms), rd = Math.round(was * (1 - u)); if (rd !== last) { last = rd; updateHud(rd); } if (u < 1) requestAnimationFrame(tk); };
+  const tk = n => { const u = Math.min(1, (n - t0) / cut), rd = Math.round(was * (1 - u)); if (rd !== last) { last = rd; updateHud(rd); } if (u < 1) requestAnimationFrame(tk); };
   requestAnimationFrame(tk);
-  await v.done; v.end();
-  D.classList.remove('op');                                                        // pintu menutup di belakang kita
-  nx.animate([{opacity: 1}, {opacity: 0}], {duration: 200, fill: 'forwards'}).finished.then(() => nx.remove(), () => nx.remove());
-  rw.remove(); updateHud(); busy = false;
+  await sleep(ms + 40);
+  rw.remove(); document.body.classList.remove('gl'); updateHud(); busy = false;
 }
 
-// Lapisan cahaya hangat layar penuh (hanya mode ringan). cover=true: menutup layar menjelang akhir zoom. cover=false: memudar membuka ruangan baru.
-function glow(cover, ms, from = .55) {
+// Lapisan cahaya layar penuh (mode ringan ?z=fade): berkedip naik menutup layar, berkedip turun membuka ruangan baru.
+function glow(cover, ms) {
   let w = $('wash');
   if (!w) { w = document.createElement('div'); w.id = 'wash'; document.body.appendChild(w); }
   w.classList.toggle('dark', VEIL === 'dark');
   w.getAnimations().forEach(a => a.cancel());
-  return w.animate(cover ? [{opacity: 0, offset: 0}, {opacity: 0, offset: from}, {opacity: 1, offset: 1}] : [{opacity: 1}, {opacity: 0}],
-    {duration: ms, easing: cover ? 'linear' : 'ease-out', fill: 'forwards'});
+  return flick(w, cover ? [0, .35, .1, .8, .5, 1] : [1, .3, .85, .2, .55, 0], ms);
 }
 
 function result() {
