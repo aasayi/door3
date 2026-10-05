@@ -79,7 +79,7 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 .dr.sk .in::before,.dr.sk .in::after{content:"";position:absolute;background:#fff;border-radius:50%;filter:blur(1px)}
 .dr.sk .in::before{left:-10%;width:90%;height:22%;top:30%;box-shadow:30px 10px 0 4px #fff}
 .dr.sk .in::after{right:-12%;width:80%;height:20%;top:62%;box-shadow:-24px 8px 0 2px #fff}
-.dr .lf{transform-origin:0 50%;transition:transform .34s cubic-bezier(.45,0,.2,1),filter .34s;
+.dr .lf{transform-origin:0 50%;transition:transform .34s cubic-bezier(.45,0,.2,1);
  background:linear-gradient(90deg,var(--cd) 0,var(--c) 9%,var(--c) 91%,var(--cd) 100%);box-shadow:inset 0 0 0 1px rgba(0,0,0,.4)}
 .dr .lf i{position:absolute;border-radius:1px;background:linear-gradient(135deg,rgba(0,0,0,.16),rgba(255,255,255,.06));
  box-shadow:inset 2px 2px 0 rgba(0,0,0,.42),inset -2px -2px 0 rgba(255,255,255,.22)}
@@ -88,7 +88,9 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 .dr .lf b{position:absolute;right:8%;top:49%;width:13%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff6c4,#d4a62a 45%,#6e4f08);box-shadow:0 1px 3px rgba(0,0,0,.8)}
 .dr .lf b::after{content:"";position:absolute;right:55%;top:30%;width:170%;height:40%;border-radius:3px 0 0 3px;background:linear-gradient(#f6dd7a,#946e0e)}
 .dr::after{content:"";position:absolute;left:-8%;right:-8%;bottom:-5px;height:10px;background:radial-gradient(ellipse,rgba(0,0,0,.75),transparent 70%);z-index:-1}
-.dr.op .lf{transform:perspective(520px) rotateY(76deg);filter:brightness(.5)}
+.dr .lf::after{content:"";position:absolute;inset:0;background:#000;opacity:0;transition:opacity .34s}
+.dr.op .lf{transform:perspective(520px) rotateY(76deg)}
+.dr.op .lf::after{opacity:.5}
 .dr.op{filter:drop-shadow(0 0 16px rgba(255,214,140,.8))}
 .dr.pr{filter:brightness(1.18)}
 .dr.bad{filter:drop-shadow(0 0 12px rgba(255,40,40,.85))}
@@ -123,13 +125,21 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 
 /* masuk pintu: cahaya hangat menutup layar di akhir zoom (dikendalikan lewat JS) */
 #wash{position:fixed;inset:0;z-index:60;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 50%,#fffbe3,#ffe4a3 55%,#ffcb7a)}
-.room,.sw{will-change:transform}
-/* pratinjau ruangan berikutnya (di dalam .sw, ikut membesar bersama pintu) */
+.room{will-change:transform}
+/* portal ruangan berikutnya (#nx): digambar sekali di ukuran layar penuh, lalu hanya di-transform + opacity */
 #nx{position:absolute;left:0;top:0;pointer-events:none;transform-origin:50% 50%;opacity:.01;will-change:transform,opacity}
+#nx .vig{animation:none}
 .nxs{position:absolute}
 .door.nf{animation:none}
-#nx.nxf{position:fixed;left:0;top:0;z-index:0}
-/* glow pintu benar: box-shadow (digambar sekali), bukan filter drop-shadow (digambar ulang tiap frame saat zoom) */
+/* bingkai portal (warna + tebal diisi lewat JS dari pintu yang dipilih), supaya bingkai pintu ikut membesar */
+#nx .rg{position:absolute;pointer-events:none;background:var(--rc,#d4202c)}
+#nx .rg.l,#nx .rg.r{background:linear-gradient(90deg,var(--rd,#82111a),var(--rc,#d4202c) 38%,var(--rc,#d4202c) 62%,var(--rd,#82111a))}
+#nx .rg.t,#nx .rg.b{background:linear-gradient(180deg,var(--rd,#82111a),var(--rc,#d4202c) 38%,var(--rc,#d4202c) 62%,var(--rd,#82111a))}
+#nx .rg.t{left:calc(var(--fs,34px)*-1);right:calc(var(--fs,34px)*-1);top:calc(var(--ft,38px)*-1);height:var(--ft,38px)}
+#nx .rg.b{left:calc(var(--fs,34px)*-1);right:calc(var(--fs,34px)*-1);bottom:calc(var(--fb,0px)*-1);height:var(--fb,0px)}
+#nx .rg.l{left:calc(var(--fs,34px)*-1);top:0;bottom:0;width:var(--fs,34px)}
+#nx .rg.r{right:calc(var(--fs,34px)*-1);top:0;bottom:0;width:var(--fs,34px)}
+/* glow pintu benar: box-shadow (digambar sekali), bukan filter drop-shadow */
 .door.op{filter:none}
 .door.op .fr{box-shadow:inset 0 0 0 2px rgba(0,0,0,.4),inset 0 0 0 4px rgba(255,255,255,.12),inset 0 0 0 6px rgba(0,0,0,.18),0 0 20px 7px rgba(255,214,140,.55),0 10px 24px rgba(0,0,0,.7)}
 /* efek rewind: tinta biru tipis + garis scan + pita yang menyapu ke atas */
