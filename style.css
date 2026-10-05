@@ -125,21 +125,14 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 
 /* masuk pintu: cahaya hangat menutup layar di akhir zoom (dikendalikan lewat JS) */
 #wash{position:fixed;inset:0;z-index:60;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 50%,#fffbe3,#ffe4a3 55%,#ffcb7a)}
-.room{will-change:transform}
-/* portal ruangan berikutnya (#nx): digambar sekali di ukuran layar penuh, lalu hanya di-transform + opacity */
+#wash.dark{background:#050203}
+.room,.sw{will-change:transform}
+/* pratinjau ruangan berikutnya (di dalam .sw, ikut membesar bersama pintu) */
 #nx{position:absolute;left:0;top:0;pointer-events:none;transform-origin:50% 50%;opacity:.01;will-change:transform,opacity}
-#nx .vig{animation:none}
 .nxs{position:absolute}
 .door.nf{animation:none}
-/* bingkai portal (warna + tebal diisi lewat JS dari pintu yang dipilih), supaya bingkai pintu ikut membesar */
-#nx .rg{position:absolute;pointer-events:none;background:var(--rc,#d4202c)}
-#nx .rg.l,#nx .rg.r{background:linear-gradient(90deg,var(--rd,#82111a),var(--rc,#d4202c) 38%,var(--rc,#d4202c) 62%,var(--rd,#82111a))}
-#nx .rg.t,#nx .rg.b{background:linear-gradient(180deg,var(--rd,#82111a),var(--rc,#d4202c) 38%,var(--rc,#d4202c) 62%,var(--rd,#82111a))}
-#nx .rg.t{left:calc(var(--fs,34px)*-1);right:calc(var(--fs,34px)*-1);top:calc(var(--ft,38px)*-1);height:var(--ft,38px)}
-#nx .rg.b{left:calc(var(--fs,34px)*-1);right:calc(var(--fs,34px)*-1);bottom:calc(var(--fb,0px)*-1);height:var(--fb,0px)}
-#nx .rg.l{left:calc(var(--fs,34px)*-1);top:0;bottom:0;width:var(--fs,34px)}
-#nx .rg.r{right:calc(var(--fs,34px)*-1);top:0;bottom:0;width:var(--fs,34px)}
-/* glow pintu benar: box-shadow (digambar sekali), bukan filter drop-shadow */
+#nx.nxf{position:fixed;left:0;top:0;z-index:0}
+/* glow pintu benar: box-shadow (digambar sekali), bukan filter drop-shadow (digambar ulang tiap frame saat zoom) */
 .door.op{filter:none}
 .door.op .fr{box-shadow:inset 0 0 0 2px rgba(0,0,0,.4),inset 0 0 0 4px rgba(255,255,255,.12),inset 0 0 0 6px rgba(0,0,0,.18),0 0 20px 7px rgba(255,214,140,.55),0 10px 24px rgba(0,0,0,.7)}
 /* efek rewind: tinta biru tipis + garis scan + pita yang menyapu ke atas */
