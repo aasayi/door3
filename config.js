@@ -1,3 +1,18 @@
-// Isi dua baris ini SEKALI (Supabase > Project Settings > API). Jangan pernah isi service_role key.
-const SB_URL = 'https://rnmcnpclkpjpsqcjnwsq.supabase.co';
-const SB_KEY = 'sb_publishable_3NU0T5iJbQTwkXq-Ej_3Qw_XkJhTNgz'; 
+const GAME_CONFIG = {
+  rooms: {
+    room1: {
+      image: "assets/room1.webp", // Disarankan format .webp
+      zoomOrigin: { x: "50%", y: "50%" }, // Titik fokus zoom ke pintu
+      targetScale: 3.5
+    },
+    room2: {
+      image: "assets/room2.webp",
+      zoomOrigin: { x: "50%", y: "50%" },
+      targetScale: 1
+    }
+  },
+  animation: {
+    duration: 1.0,
+    ease: "power2.inOut"
+  }
+};
